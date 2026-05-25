@@ -1,0 +1,13 @@
+.env
+.env.local
+.env.prod
+config/session_payload.json
+.venv/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+build/
+cmake-build-*/
+compile_commands.json

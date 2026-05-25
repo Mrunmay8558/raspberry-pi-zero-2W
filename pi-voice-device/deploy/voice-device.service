@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi Voice Device Native Daily Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pi-voice-device
+EnvironmentFile=/opt/pi-voice-device/.env
+ExecStart=/opt/pi-voice-device/native/pipecat_daily_client/build/pi_voice_daily_client
+Restart=always
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target
