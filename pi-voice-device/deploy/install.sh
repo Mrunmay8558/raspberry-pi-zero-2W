@@ -5,6 +5,7 @@ APP_DIR="/opt/pi-voice-device"
 SERVICE_FILE="/etc/systemd/system/voice-device.service"
 SESSION_PAYLOAD="${APP_DIR}/config/session_payload.json"
 NATIVE_BINARY="${APP_DIR}/native/pipecat_daily_client/build/pi_voice_daily_client"
+RUN_SCRIPT="${APP_DIR}/deploy/run-voice-device.sh"
 
 echo "Installing pi voice device into ${APP_DIR}"
 sudo mkdir -p "${APP_DIR}"
@@ -29,8 +30,12 @@ if [ ! -x "${NATIVE_BINARY}" ]; then
   echo "Build native/pipecat_daily_client before starting the service."
 fi
 
+sudo chmod +x "${RUN_SCRIPT}"
+
 sudo cp "${APP_DIR}/deploy/voice-device.service" "${SERVICE_FILE}"
 sudo systemctl daemon-reload
 sudo systemctl enable voice-device.service
 
-echo "Install complete. Start with: sudo systemctl start voice-device.service"
+echo "Install complete."
+echo "Run once manually with: ${RUN_SCRIPT}"
+echo "Run as a service with: sudo systemctl start voice-device.service"

@@ -8,7 +8,7 @@ returns the connection payload expected by the Pipecat Daily transport.
 
 Runtime flow:
 
-1. `systemd` starts the native C++ client.
+1. `systemd` or the launcher script starts the native C++ client.
 2. The service loads one environment file at `/opt/pi-voice-device/.env`.
 3. The client reads `EIGI_API_BASE_URL`, `EIGI_PUBLIC_API_KEY`, and
    `PI_DEVICE_SESSION_PAYLOAD`.
@@ -60,13 +60,46 @@ cmake . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 ```
 
-## Run Locally
-
-Source the single `.env` file and run the native client:
+If you want one Pi-side setup command that installs packages, builds the native
+client, copies the app to `/opt/pi-voice-device`, and enables the service, use:
 
 ```bash
-set -a
-. ./.env
-set +a
-./native/pipecat_daily_client/build/pi_voice_daily_client
+export PIPECAT_SDK_PATH=/path/to/pipecat-client-cxx
+export DAILY_PIPECAT_SDK_PATH=/path/to/pipecat-client-cxx-daily
+export DAILY_CORE_PATH=/path/to/daily-core-sdk
+./deploy/setup-pi.sh
 ```
+
+`setup-pi.sh` installs the Raspberry Pi OS packages automatically, but it still
+expects the Pipecat SDK, Pipecat Daily SDK, and Daily Core SDK to already be
+present on disk at those paths.
+
+## Run Locally
+
+Use the launcher script so manual runs and `systemd` use the same entrypoint:
+
+```bash
+cp .env.local .env
+./deploy/run-voice-device.sh
+```
+
+## Run On Raspberry Pi
+
+Install the repo under `/opt/pi-voice-device`, then use the same launcher
+script directly or through `systemd`:
+
+```bash
+cd /opt/pi-voice-device
+./deploy/run-voice-device.sh
+```
+
+```bash
+sudo systemctl start voice-device.service
+sudo systemctl status voice-device.service
+```
+
+## Wake Word
+
+There is no wake-word or hotword implementation in this repo right now.
+The current device behavior is direct start: run the launcher script or start
+the `voice-device.service`, and the bot connects immediately.
