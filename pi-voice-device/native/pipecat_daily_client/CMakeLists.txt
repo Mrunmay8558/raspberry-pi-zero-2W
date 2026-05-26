@@ -42,6 +42,13 @@ if(UNIX)
   target_compile_options(pi_voice_daily_client PRIVATE -Wall -Wextra -fno-rtti)
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(pi_voice_daily_client PRIVATE
+    -Wl,--no-keep-memory
+    -Wl,--reduce-memory-overheads
+  )
+endif()
+
 if(APPLE)
   target_compile_options(pi_voice_daily_client PRIVATE -fvisibility=hidden)
 
