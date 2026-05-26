@@ -33,6 +33,9 @@ The important values are:
   locally or `https://api.eigi.ai` in production
 - `EIGI_PUBLIC_API_KEY`: your eigi public API key; keep it out of Git
 - `PI_DEVICE_SESSION_PAYLOAD`: JSON request body file for the Daily session
+- `PI_AUDIO_INPUT_DEVICE` / `PI_AUDIO_OUTPUT_DEVICE`: optional PortAudio device
+  selectors. Use a numeric PortAudio index or a case-insensitive device-name
+  substring when the Raspberry Pi default ALSA input/output is not usable.
 
 ## Native Build
 

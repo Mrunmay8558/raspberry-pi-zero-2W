@@ -16,7 +16,7 @@
 namespace pi_voice_device {
 
 /**
- * Captures microphone audio from the default PortAudio input device.
+ * Captures microphone audio from the configured or default PortAudio input device.
  *
  * PortAudio calls this class on a real-time audio callback thread. The callback
  * forwards 16-bit PCM microphone frames into the Pipecat RTVI client, which
@@ -33,7 +33,7 @@ class AudioInput {
     AudioInput(rtvi::RTVIClient* client, uint32_t sample_rate);
     ~AudioInput();
 
-    /** Opens and starts the default microphone input stream. */
+    /** Opens and starts the configured or default microphone input stream. */
     void start();
 
     /** Stops and closes the microphone input stream if it is running. */
@@ -77,7 +77,7 @@ class AudioOutput {
     AudioOutput(rtvi::RTVIClient* client, uint32_t sample_rate);
     ~AudioOutput();
 
-    /** Opens the default speaker output stream and starts the read thread. */
+    /** Opens the configured or default speaker output stream and starts the read thread. */
     void start();
 
     /** Stops the read thread and closes the speaker output stream. */

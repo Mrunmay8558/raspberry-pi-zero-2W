@@ -1,7 +1,11 @@
 #include "audio_device.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -21,6 +25,127 @@ std::runtime_error portaudio_error(const std::string& context, PaError error) {
     return std::runtime_error(context + ": " + Pa_GetErrorText(error));
 }
 
+std::string get_env_or_empty(const char* name) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? std::string() : std::string(value);
+}
+
+std::string to_lower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
+    return value;
+}
+
+bool parse_device_index(const std::string& value, PaDeviceIndex* index) {
+    if (value.empty()) {
+        return false;
+    }
+
+    char* end = nullptr;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    if (*end != '\0' || parsed < 0) {
+        return false;
+    }
+
+    *index = static_cast<PaDeviceIndex>(parsed);
+    return true;
+}
+
+bool device_supports_direction(const PaDeviceInfo* info, bool input) {
+    return input ? info->maxInputChannels > 0 : info->maxOutputChannels > 0;
+}
+
+std::string format_audio_devices(bool input) {
+    const PaDeviceIndex count = Pa_GetDeviceCount();
+    if (count < 0) {
+        return std::string("unable to enumerate PortAudio devices: ") + Pa_GetErrorText(count);
+    }
+
+    std::ostringstream output;
+    output << "available " << (input ? "input" : "output") << " devices:";
+    bool found = false;
+    for (PaDeviceIndex index = 0; index < count; ++index) {
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(index);
+        if (info == nullptr || !device_supports_direction(info, input)) {
+            continue;
+        }
+
+        found = true;
+        output << "\n  [" << index << "] " << info->name
+               << " (inputs=" << info->maxInputChannels
+               << ", outputs=" << info->maxOutputChannels << ")";
+    }
+
+    if (!found) {
+        output << " none";
+    }
+
+    return output.str();
+}
+
+std::runtime_error portaudio_stream_error(
+        const std::string& context,
+        PaError error,
+        PaDeviceIndex device,
+        bool input
+) {
+    std::ostringstream message;
+    message << context << ": " << Pa_GetErrorText(error);
+
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(device);
+    if (info != nullptr) {
+        message << " (device [" << device << "] " << info->name << ")";
+    }
+
+    message << "\n" << format_audio_devices(input);
+    return std::runtime_error(message.str());
+}
+
+PaDeviceIndex select_audio_device(const std::string& spec, bool input) {
+    const PaDeviceIndex count = Pa_GetDeviceCount();
+    if (count < 0) {
+        throw portaudio_error("Unable to enumerate audio devices", count);
+    }
+
+    PaDeviceIndex device = input ? Pa_GetDefaultInputDevice() : Pa_GetDefaultOutputDevice();
+    if (!spec.empty()) {
+        PaDeviceIndex requested_index = paNoDevice;
+        if (parse_device_index(spec, &requested_index)) {
+            device = requested_index;
+        } else {
+            const std::string requested_name = to_lower(spec);
+            device = paNoDevice;
+            for (PaDeviceIndex index = 0; index < count; ++index) {
+                const PaDeviceInfo* info = Pa_GetDeviceInfo(index);
+                if (info == nullptr || !device_supports_direction(info, input)) {
+                    continue;
+                }
+
+                if (to_lower(info->name).find(requested_name) != std::string::npos) {
+                    device = index;
+                    break;
+                }
+            }
+        }
+    }
+
+    const PaDeviceInfo* info = device == paNoDevice ? nullptr : Pa_GetDeviceInfo(device);
+    if (info == nullptr || !device_supports_direction(info, input)) {
+        std::ostringstream message;
+        message << "Unable to select " << (input ? "input" : "output") << " audio device";
+        if (!spec.empty()) {
+            message << " matching '" << spec << "'";
+        }
+        message << "\n" << format_audio_devices(input);
+        throw std::runtime_error(message.str());
+    }
+
+    std::cout << "Using " << (input ? "input" : "output") << " audio device ["
+              << device << "] " << info->name << std::endl;
+    return device;
+}
+
 }  // namespace
 
 AudioInput::AudioInput(rtvi::RTVIClient* client, uint32_t sample_rate)
@@ -33,27 +158,36 @@ AudioInput::~AudioInput() {
 }
 
 void AudioInput::start() {
-    // One input channel, no output channel, signed 16-bit PCM.
-    PaError error = Pa_OpenDefaultStream(
+    const PaDeviceIndex device = select_audio_device(get_env_or_empty("PI_AUDIO_INPUT_DEVICE"), true);
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(device);
+
+    PaStreamParameters input_parameters;
+    input_parameters.device = device;
+    input_parameters.channelCount = 1;
+    input_parameters.sampleFormat = paInt16;
+    input_parameters.suggestedLatency = info->defaultLowInputLatency;
+    input_parameters.hostApiSpecificStreamInfo = nullptr;
+
+    PaError error = Pa_OpenStream(
             &_stream,
-            1,
-            0,
-            paInt16,
+            &input_parameters,
+            nullptr,
             _sample_rate,
             paFramesPerBufferUnspecified,
+            paNoFlag,
             &AudioInput::on_portaudio_input,
             this
     );
 
     if (error != paNoError) {
-        throw portaudio_error("Unable to open audio input", error);
+        throw portaudio_stream_error("Unable to open audio input", error, device, true);
     }
 
     error = Pa_StartStream(_stream);
     if (error != paNoError) {
         Pa_CloseStream(_stream);
         _stream = nullptr;
-        throw portaudio_error("Unable to start audio input", error);
+        throw portaudio_stream_error("Unable to start audio input", error, device, true);
     }
 
     _recording = true;
@@ -106,27 +240,36 @@ AudioOutput::~AudioOutput() {
 }
 
 void AudioOutput::start() {
-    // No input channel, one output channel, signed 16-bit PCM.
-    PaError error = Pa_OpenDefaultStream(
+    const PaDeviceIndex device = select_audio_device(get_env_or_empty("PI_AUDIO_OUTPUT_DEVICE"), false);
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(device);
+
+    PaStreamParameters output_parameters;
+    output_parameters.device = device;
+    output_parameters.channelCount = 1;
+    output_parameters.sampleFormat = paInt16;
+    output_parameters.suggestedLatency = info->defaultLowOutputLatency;
+    output_parameters.hostApiSpecificStreamInfo = nullptr;
+
+    PaError error = Pa_OpenStream(
             &_stream,
-            0,
-            1,
-            paInt16,
+            nullptr,
+            &output_parameters,
             _sample_rate,
             paFramesPerBufferUnspecified,
+            paNoFlag,
             &AudioOutput::on_portaudio_output,
             this
     );
 
     if (error != paNoError) {
-        throw portaudio_error("Unable to open audio output", error);
+        throw portaudio_stream_error("Unable to open audio output", error, device, false);
     }
 
     error = Pa_StartStream(_stream);
     if (error != paNoError) {
         Pa_CloseStream(_stream);
         _stream = nullptr;
-        throw portaudio_error("Unable to start audio output", error);
+        throw portaudio_stream_error("Unable to start audio output", error, device, false);
     }
 
     _started = true;
