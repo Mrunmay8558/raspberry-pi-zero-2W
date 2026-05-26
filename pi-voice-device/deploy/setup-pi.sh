@@ -22,8 +22,6 @@ fi
 require_command sudo
 require_command apt-get
 require_command systemctl
-require_command cmake
-require_command ninja
 
 require_env_path() {
   var_name="$1"
@@ -53,6 +51,9 @@ sudo apt-get install -y \
   ninja-build \
   pkg-config \
   portaudio19-dev
+
+require_command cmake
+require_command ninja
 
 require_env_path PIPECAT_SDK_PATH
 require_env_path DAILY_PIPECAT_SDK_PATH
