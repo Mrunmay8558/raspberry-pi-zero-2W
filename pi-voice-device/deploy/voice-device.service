@@ -10,7 +10,7 @@ EnvironmentFile=/opt/pi-voice-device/.env
 ExecStart=/opt/pi-voice-device/deploy/run-voice-device.sh
 Restart=always
 RestartSec=5
-User=pi
+User=__PI_DEVICE_USER__
 
 [Install]
 WantedBy=multi-user.target

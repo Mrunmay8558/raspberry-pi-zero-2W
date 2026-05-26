@@ -99,13 +99,25 @@ clone_repo_if_missing() {
 }
 
 ensure_daily_pipecat_compat() {
+  DAILY_PIPECAT_COMPAT_UPDATED=0
   transport_header="${DAILY_PIPECAT_SDK_PATH}/include/daily_transport.h"
+  transport_source="${DAILY_PIPECAT_SDK_PATH}/src/daily_transport.cpp"
 
   if [ ! -f "${transport_header}" ]; then
     return
   fi
 
-  sed -i 's/NativeDeviceManager\*/DailyDeviceManager*/g' "${transport_header}"
+  if grep -q 'NativeDeviceManager\*' "${transport_header}"; then
+    sed -i 's/NativeDeviceManager\*/DailyDeviceManager*/g' "${transport_header}"
+    DAILY_PIPECAT_COMPAT_UPDATED=1
+  fi
+
+  if [ -f "${transport_source}" ]; then
+    if grep -q 'if (!info.contains("room_url") || !info.contains("token"))' "${transport_source}"; then
+      perl -0pi -e 's/    if \(!info.contains\("room_url"\) \|\| !info.contains\("token"\)\) \{\n        throw RTVIException\(\n                "invalid connection info: missing `room_url` or `token`"\n        \);\n    \}\n\n    \/\/ Cleanup bot participant\.\n    _bot_participant = nullptr;\n\n    std::string room_url = info\["room_url"\]\.get<std::string>\(\);\n    std::string token = info\["token"\]\.get<std::string>\(\);/    const char* room_key = info.contains("room_url") ? "room_url" : "dailyRoom";\n    const char* token_key = info.contains("token") ? "token" : "dailyToken";\n\n    if (!info.contains(room_key) || !info.contains(token_key)) {\n        throw RTVIException(\n                "invalid connection info: missing `room_url` or `token`"\n        );\n    }\n\n    \/\/ Cleanup bot participant.\n    _bot_participant = nullptr;\n\n    std::string room_url = info[room_key].get<std::string>();\n    std::string token = info[token_key].get<std::string>();/' "${transport_source}"
+      DAILY_PIPECAT_COMPAT_UPDATED=1
+    fi
+  fi
 }
 
 ensure_daily_core_sdk() {
@@ -151,6 +163,8 @@ ensure_pipecat_sdk() {
 }
 
 ensure_daily_pipecat_sdk() {
+  daily_pipecat_library=""
+
   if [ -z "${DAILY_PIPECAT_SDK_PATH:-}" ]; then
     DAILY_PIPECAT_SDK_PATH="${DEPS_DIR}/pipecat-client-cxx-daily"
     export DAILY_PIPECAT_SDK_PATH
@@ -160,7 +174,13 @@ ensure_daily_pipecat_sdk() {
   require_env_path DAILY_PIPECAT_SDK_PATH
   ensure_daily_pipecat_compat
 
-  if [ -f "${DAILY_PIPECAT_SDK_PATH}/lib/Release/libdaily_pipecat.a" ] || [ -f "${DAILY_PIPECAT_SDK_PATH}/lib/libdaily_pipecat.a" ]; then
+  if [ -f "${DAILY_PIPECAT_SDK_PATH}/lib/Release/libdaily_pipecat.a" ]; then
+    daily_pipecat_library="${DAILY_PIPECAT_SDK_PATH}/lib/Release/libdaily_pipecat.a"
+  elif [ -f "${DAILY_PIPECAT_SDK_PATH}/lib/libdaily_pipecat.a" ]; then
+    daily_pipecat_library="${DAILY_PIPECAT_SDK_PATH}/lib/libdaily_pipecat.a"
+  fi
+
+  if [ -n "${daily_pipecat_library}" ] && [ "${DAILY_PIPECAT_COMPAT_UPDATED:-0}" -eq 0 ]; then
     return
   fi
 

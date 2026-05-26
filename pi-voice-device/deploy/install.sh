@@ -6,6 +6,7 @@ SERVICE_FILE="/etc/systemd/system/voice-device.service"
 SESSION_PAYLOAD="${APP_DIR}/config/session_payload.json"
 NATIVE_BINARY="${APP_DIR}/native/pipecat_daily_client/build/pi_voice_daily_client"
 RUN_SCRIPT="${APP_DIR}/deploy/run-voice-device.sh"
+SERVICE_USER="${SUDO_USER:-${USER}}"
 
 echo "Installing pi voice device into ${APP_DIR}"
 sudo mkdir -p "${APP_DIR}"
@@ -32,7 +33,12 @@ fi
 
 sudo chmod +x "${RUN_SCRIPT}"
 
-sudo cp "${APP_DIR}/deploy/voice-device.service" "${SERVICE_FILE}"
+if ! id "${SERVICE_USER}" >/dev/null 2>&1; then
+  echo "Service user does not exist: ${SERVICE_USER}" >&2
+  exit 1
+fi
+
+sed "s/__PI_DEVICE_USER__/${SERVICE_USER}/g" "${APP_DIR}/deploy/voice-device.service" | sudo tee "${SERVICE_FILE}" >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable voice-device.service
 
