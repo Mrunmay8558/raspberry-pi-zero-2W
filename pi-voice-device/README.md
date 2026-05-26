@@ -60,8 +60,19 @@ cmake . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
 ninja -C build
 ```
 
-If you want one Pi-side setup command that installs packages, builds the native
-client, copies the app to `/opt/pi-voice-device`, and enables the service, use:
+If you want one Pi-side setup command that installs packages, bootstraps the
+Pipecat SDKs, builds the native client, copies the app to `/opt/pi-voice-device`,
+and enables the service, use:
+
+```bash
+./deploy/setup-pi.sh
+```
+
+By default, `setup-pi.sh` clones the public Pipecat SDK repositories under
+`.deps/`, downloads the Daily Core Linux arm64 SDK release, builds the needed
+static libraries, and writes `LD_LIBRARY_PATH` into the runtime `.env`.
+
+If you already have those SDKs on disk, you can still override the defaults:
 
 ```bash
 export PIPECAT_SDK_PATH=/path/to/pipecat-client-cxx
@@ -69,10 +80,6 @@ export DAILY_PIPECAT_SDK_PATH=/path/to/pipecat-client-cxx-daily
 export DAILY_CORE_PATH=/path/to/daily-core-sdk
 ./deploy/setup-pi.sh
 ```
-
-`setup-pi.sh` installs the Raspberry Pi OS packages automatically, but it still
-expects the Pipecat SDK, Pipecat Daily SDK, and Daily Core SDK to already be
-present on disk at those paths.
 
 ## Run Locally
 
